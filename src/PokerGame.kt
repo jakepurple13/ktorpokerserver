@@ -60,6 +60,9 @@ suspend fun receivedMessage(id: String, command: String) {
             Type.SUBMIT_HAND -> server.submitHand(id, cardPlay)
             Type.CHAT -> server.message(id, command)
             Type.RENAME -> server.memberRenamed(id, cardPlay<String>()!!)
+            Type.ANTE -> server.ante(id)
+            Type.BET_MONEY -> server.betMoney(id, cardPlay)
+            Type.MONEY_CHECK -> server.moneyCheck(id)
             else -> Unit
         }
     } catch (e: Exception) {
@@ -68,7 +71,7 @@ suspend fun receivedMessage(id: String, command: String) {
 }
 
 enum class Type {
-    DRAW_CARDS, GET_HAND, UPDATE, CHAT, SUBMIT_HAND, RENAME
+    DRAW_CARDS, GET_HAND, UPDATE, CHAT, SUBMIT_HAND, RENAME, ANTE, BET_MONEY, MONEY_CHECK
 }
 
 data class CardType(val type: Type, val any: Any) {

@@ -20,8 +20,11 @@ import java.util.concurrent.atomic.AtomicInteger
 data class ChatUser(
     var name: String,
     var hand: List<Card> = emptyList(),
-    var submitted: Boolean = false
+    var submitted: Boolean = false,
+    var money: UserMoney = UserMoney()
 )
+
+data class UserMoney(var money: Double = 20.0, var anted: Boolean = false)
 
 class PokerServer {
     /**
@@ -93,6 +96,34 @@ class PokerServer {
         }*/
     }
 
+    private var pot = 0.0
+    private var ante = 5
+
+    suspend fun ante(sender: String) {
+        val member = memberNames[sender]
+        member?.money?.money = member?.money?.money?.minus(ante)!!
+        pot += ante
+        member.money.anted = true
+        members[sender]?.send(CardType(Type.ANTE, "You anted \$$ante. You have \$${member.money.money}").toFrameJson())
+        if (checkAll { it.value.money.anted } && memberNames.size > 1) broadcast("Everyone has anted. The pot is $pot.")
+    }
+
+    suspend fun betMoney(sender: String, cardPlay: CardType) {
+        val play = cardPlay<Double>() ?: 0.0
+        val member = memberNames[sender]?.money
+        if (member?.money ?: 0 - play >= 0) {
+            member?.money = member?.money?.minus(play)!!
+            pot += play
+        }
+        members[sender]?.send(CardType(Type.BET_MONEY, "You bet \$$play. The pot is now $pot.").toFrameJson())
+    }
+
+    private fun checkAll(predicate: (Map.Entry<String, ChatUser>) -> Boolean) = memberNames.all(predicate) && memberNames.isNotEmpty()
+
+    suspend fun moneyCheck(sender: String) {
+        members[sender]?.send(CardType(Type.MONEY_CHECK, memberNames[sender]?.money?.money!!).toFrameJson())
+    }
+
     suspend fun sendCards(sender: String, cardPlay: CardType) {
         members[sender]?.send(CardType(Type.GET_HAND, scores.getWinningHand(cardPlay.any.toJson().fromJson<List<Card>>()!!)).toFrameJson())
     }
@@ -108,7 +139,7 @@ class PokerServer {
     }
 
     private suspend fun submittedHandCheck() {
-        if (memberNames.all { it.value.submitted } && memberNames.isNotEmpty()) {
+        if (checkAll { it.value.submitted }) {
             //val otherHands = memberNames.elements().toList().groupBy { scores.getWinningHand(it.hand) }
             //val highest = otherHands.maxBy { it.key.defaultWinning }!!
             /*val high = if (highest.value.size > 1)
@@ -118,11 +149,19 @@ class PokerServer {
             val allHands = memberNames.elements().toList().sortedByDescending { scores.getWinningHand(it.hand).defaultWinning }.joinToString("\n") {
                 "${it.name} had a ${scores.getWinningHand(it.hand).stringName} with: ${it.hand.map { "${it.symbol}${it.suit.unicodeSymbol}" }}"
             }
-            broadcast("${high.second.joinToString(", ") { it.name }} won with a ${high.first.stringName}\n$allHands")
+            broadcast("${high.second.joinToString(", ") { it.name }} won \$$pot with a ${high.first.stringName}\n$allHands")
+            high.second.forEach { it.money.money += pot / high.second.size }
             memberNames.forEach {
                 it.value.submitted = false
                 it.value.hand = emptyList()
+                it.value.money.anted = false
             }
+            pot = 0.0
+            /*memberNames.forEach {
+                if(it.value.money.money<=0) {
+
+                }
+            }*/
         }
     }
 
